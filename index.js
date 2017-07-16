@@ -7,14 +7,19 @@
  *************************************
  */
 const
-    fs = require('fs'),
-    path = require('path'),
-    mime = require('mime'),
     loaderUtils = require('loader-utils'),
-    resolveAlias = require('./resolveAlias'),
-    urlRegExp = /url\((.+)\?(.+)\)/g,
-    typeRegExp = /\.(svg|tpl)/,
-    cache = {};
+    resolveAlias = require('./lib/resolveAlias'),
+    createImporter = require('./lib/createImporter'),
+    varRegExp = /\.(js|var)(\?.+)?$/;
+
+
+/**
+ *************************************
+ * 缓存别名
+ *************************************
+ */
+let loading = true;
+
 
 
 /**
@@ -22,74 +27,49 @@ const
  * 定义加载器
  *************************************
  */
-let alias = null;
-module.exports.raw = true;
-module.exports = function(content) {
+module.exports = function (content) {
 
+    // 启用缓存
     this.cacheable && this.cacheable();
 
-    if (!alias) {
-        alias = resolveAlias(this.options.resolve.alias);
-    }
+    // 是否已经加载过
+    if (loading) {
 
-    try {
-
-        let {
-                replace = urlRegExp,
-                fileType = typeRegExp
-            } = loaderUtils.getOptions(this) || {},
-            dir = path.dirname(this.resourcePath);
-
-        return content
-            .toString()
-            .replace(replace, (patt, $1, $2) => {
-
-                if (!fileType.test($1)) {
-                    return patt;
-                }
-
-                let query = $2.split('&');
-
-                if (query.length) {
-
-                    let src = path.resolve(dir, /^~/.test($1) ? alias($1.slice(1)): $1);
-
-
-                    if (!(src in cache)) {
-                        cache[src] = {
-                            code: fs.readFileSync(src).toString(),
-                            mimetype: mime.lookup(src)
-                        };
-
-                        cache[src].base64 = cache[src].mimetype.startsWith('image/');
-                    }
-
-                    let { code, mimetype, base64 } = cache[src];
-
-
-                    query.forEach(item => {
-                        let [key, val] = item.split('='),
-                            regexp = new RegExp('\\$' + key, 'g');
-
-                        code = code.replace(regexp, val);
-                    });
-
-
-                    if (base64) {
-                        code = Buffer.from(code).toString('base64');
-                        return `url(data:${mimetype ? mimetype + ';' : ''}base64,${code})`;
-                    }
-
-                    return code;
-                }
-
-                return patt;
+        // 创建引入器
+        let options = loaderUtils.getOptions(this) || {},
+            varImporter = createImporter({
+                data: options.data || {},
+                test: options.test || varRegExp,
+                alias: resolveAlias(this.options.resolve.alias)
             });
 
-    } catch (ex) {
-        console.error(ex);
+
+        // 添加【Sass】引入器
+        for (let loader of this.loaders) {
+            if (loader.path.indexOf('/node_modules/sass-loader/') !== -1) {
+
+                // 添加配置
+                if (!loader.options) {
+                    loader.options = {};
+                }
+
+                // 添加引入模块
+                if (loader.options.importer) {
+                    loader.options.importer.push(varImporter);
+                } else {
+                    loader.options.importer = [varImporter];
+                }
+
+                // 返回
+                break;
+            }
+        }
+
+        // 修改标识
+        loading = false;
     }
 
+    // 返回源码
     return content;
 };
 
