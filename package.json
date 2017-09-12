@@ -1,6 +1,6 @@
 {
   "name": "var-loader",
-  "version": "1.0.2",
+  "version": "1.0.201",
   "description": "loader es6 module to Sass params for webpack",
   "main": "index.js",
   "author": "lifx",
