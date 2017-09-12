@@ -8,9 +8,7 @@
  */
 const
     loaderUtils = require('loader-utils'),
-    resolveAlias = require('./lib/resolveAlias'),
-    createImporter = require('./lib/createImporter'),
-    varRegExp = /\.(js|var)(\?.+)?$/;
+    varImporter = require('var-importer');
 
 
 /**
@@ -18,7 +16,22 @@ const
  * 缓存别名
  *************************************
  */
-let loading = true;
+let sassLoader = null,
+    proxy = null,
+    addDependency = name => {
+        return proxy && proxy.addDependency(name);
+    };
+
+
+/**
+ *****************************************
+ * 定义变量加载器
+ *****************************************
+ */
+function varLoader(...args) {
+    proxy = this;
+    return sassLoader.apply(proxy, args);
+}
 
 
 
@@ -28,25 +41,27 @@ let loading = true;
  *************************************
  */
 module.exports = function (content) {
-
-    // 启用缓存
-    this.cacheable && this.cacheable();
-
-    // 是否已经加载过
-    if (loading) {
-
-        // 创建引入器
-        let options = loaderUtils.getOptions(this) || {},
-            varImporter = createImporter({
-                data: options.data || {},
-                test: options.test || varRegExp,
-                alias: resolveAlias(this.options.resolve.alias)
-            });
+    let idx = this.loaderIndex,
+        loader;
 
 
-        // 添加【Sass】引入器
-        for (let loader of this.loaders) {
-            if (loader.path.indexOf('/node_modules/sass-loader/') !== -1) {
+    while (idx) {
+        loader = this.loaders[idx --];
+
+        // 查找【sass】加载器
+        if (loader.path.indexOf('/sass-loader/') !== -1) {
+
+            // 初始化加载器
+            if (!sassLoader) {
+                let options = loaderUtils.getOptions(this) || {},
+                    importer = varImporter(Object.assign({}, options, {
+                        alias: this.options.resolve.alias,
+                        callback: addDependency
+                    }));
+
+
+                // 缓存【sass】加载器
+                sassLoader = loader.normal;
 
                 // 添加配置
                 if (!loader.options) {
@@ -55,21 +70,21 @@ module.exports = function (content) {
 
                 // 添加引入模块
                 if (loader.options.importer) {
-                    loader.options.importer.push(varImporter);
+                    loader.options.importer.push(importer);
                 } else {
-                    loader.options.importer = [varImporter];
+                    loader.options.importer = [importer];
                 }
-
-                // 返回
-                break;
             }
-        }
 
-        // 修改标识
-        loading = false;
+            // 替换加载器
+            if (loader.normal !== varLoader) {
+                loader.normal = varLoader;
+            }
+
+            break;
+        }
     }
 
-    // 返回源码
     return content;
 };
 
