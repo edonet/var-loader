@@ -1,93 +1,53 @@
+/**
+ *****************************************
+ * Created by lifx
+ * Created on 2018-08-09 10:39:41
+ *****************************************
+ */
 'use strict';
 
 
 /**
- *************************************
+ *****************************************
  * 加载依赖
- *************************************
+ *****************************************
  */
-const
-    loaderUtils = require('loader-utils'),
-    varImporter = require('var-importer');
-
-
-/**
- *************************************
- * 缓存别名
- *************************************
- */
-let sassLoader = null,
-    proxy = null,
-    addDependency = name => {
-        return proxy && proxy.addDependency(name);
-    };
+const utils = require('loader-utils');
 
 
 /**
  *****************************************
- * 定义变量加载器
+ * 加载器
  *****************************************
  */
-function varLoader(...args) {
-    proxy = this;
-    return sassLoader.apply(proxy, args);
-}
+module.exports = function loader(code) {
+    let options = utils.getOptions(this) || {},
+        find = options.find || /\$\{(.*?)\}/g,
+        replace = options.replace,
+        data = {
+            ...options.data,
+            ...utils.parseQuery(this.resourceQuery || '?')
+        };
 
+    // 查找替换
+    if (find) {
+        code = code.replace(find, (str, $1) => {
+            let [key, val = ''] = $1.split(':');
 
+            // 去除空白
+            key = key && key.trim();
+            val = val && val.trim();
 
-/**
- *************************************
- * 定义加载器
- *************************************
- */
-module.exports = function (content) {
-    let idx = this.loaderIndex,
-        loader;
-
-
-    while (idx) {
-        loader = this.loaders[idx --];
-
-        // 查找【sass】加载器
-        if (loader.path.indexOf('/sass-loader/') !== -1) {
-
-            // 初始化加载器
-            if (!sassLoader) {
-                let options = loaderUtils.getOptions(this) || {},
-                    importer = varImporter(Object.assign({}, options, {
-                        alias: this.options.resolve.alias,
-                        callback: addDependency
-                    }));
-
-
-                // 缓存【sass】加载器
-                sassLoader = loader.normal;
-
-                // 添加配置
-                if (!loader.options) {
-                    loader.options = {};
-                }
-
-                // 添加引入模块
-                if (loader.options.importer) {
-                    loader.options.importer.push(importer);
-                } else {
-                    loader.options.importer = [importer];
-                }
+            // 替换数据
+            if (key) {
+                return key in data ? data[key] : replace ? replace(key, val) || val : val;
             }
 
-            // 替换加载器
-            if (loader.normal !== varLoader) {
-                loader.normal = varLoader;
-            }
-
-            break;
-        }
+            // 返回默认值
+            return val;
+        });
     }
 
-    return content;
+    // 返回代码
+    return code;
 };
-
-
-
-

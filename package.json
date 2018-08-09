@@ -1,13 +1,11 @@
 {
-  "name": "var-loader",
-  "version": "1.0.201",
-  "description": "loader es6 module to Sass params for webpack",
-  "main": "index.js",
-  "author": "lifx",
-  "license": "MIT",
-  "dependencies": {
-    "latest": "^0.2.0",
-    "loader-utils": "^1.1.0",
-    "var-importer": "^0.1.2"
-  }
+    "name": "var-loader",
+    "version": "1.0.3",
+    "description": "string variable replace loader for webpack",
+    "main": "index.js",
+    "author": "lifx",
+    "license": "MIT",
+    "dependencies": {
+        "loader-utils": "^1.1.0"
+    }
 }
